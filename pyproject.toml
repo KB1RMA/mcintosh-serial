@@ -1,6 +1,6 @@
 [project]
 name = "mcintosh-serial"
-version = "0.2.0"
+version = "0.3.0"
 description = "Async Python library for controlling McIntosh receivers, preamps and amplifiers over RS232."
 readme = "README.md"
 license = "MIT"

@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## [0.3.0](https://github.com/KB1RMA/mcintosh-serial/compare/v0.2.0...v0.3.0) (2026-11-17)
+
 
 ### Features
 
-* one generic `Client` for every command style, with a `Dialect` interface, so the library now speaks the MX119 (zoned), MA352 and MA5300 (simple) and MX160, MX170 and MX180 (bang) styles; only the MX119 is verified on hardware
+* one generic `Client` for every command style, with a `Dialect` interface, so the library now speaks the MX119 (zoned), MA352 and MA5300 (simple) and MX160, MX170 and MX180 (bang) styles; only the MX119 is verified on hardware ([2ff90f5](https://github.com/KB1RMA/mcintosh-serial/commit/2ff90f5))
 * model profiles as TOML files (`mcintosh_serial/models/`): ten models so far, each labeled `verified`, `reported` or `untested`
 * `connect(url, model)` opens the port at the model's baud rate and returns a started client
 * the `mcintosh-serial` command: `models`, `detect` (which command style does a unit speak?) and `capture` (a safe, serial-number-redacted session for a "new device" issue)
@@ -13,6 +14,7 @@
 * contributor guide, issue forms and a pull request template
 * `Timing.volume` (volume sets, longer for the MA352 and MA5300, which ramp) and `Timing.optional` (optional queries, so unanswered ones cost about a second each)
 * `Dialect.after_power()`: the simple style turns status reporting on after power-on when the client started in standby
+
 
 ### Changed
 
