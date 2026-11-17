@@ -41,6 +41,8 @@ class Timing:
     command: float = 2.0
     query: float = 4.0
     power: float = 12.0
+    volume: float = 2.0  # a volume set; longer for units that ramp to the target
+    optional: float = 1.0  # an optional query, which some units never answer
     settle: float = 0.3  # quiet time after a reply before the next command
     settle_max: float = 3.0
     retry_delay: float = 1.0  # wait before retrying a query rejected after power-up
@@ -151,6 +153,7 @@ class Client:
     async def set_power(self, zone: int, *, on: bool) -> None:
         """Turn a zone on or off and wait for the unit to confirm."""
         await self._send(self._dialect.power(zone, on=on))
+        await self._dialect.after_power(self, zone, on=on)
 
     async def set_volume(self, zone: int, level: int) -> None:
         """Set a zone's volume to the unit's own step number."""
@@ -179,6 +182,8 @@ class Client:
             "command": self._timing.command,
             "query": self._timing.query,
             "power": self._timing.power,
+            "volume": self._timing.volume,
+            "optional": self._timing.optional,
         }[wait]
 
     async def exchange(self, command: Command) -> Frame:

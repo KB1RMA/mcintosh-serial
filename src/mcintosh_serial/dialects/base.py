@@ -8,7 +8,7 @@ only a model profile.
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import KW_ONLY, dataclass
 from typing import TYPE_CHECKING, Literal, Protocol
 
 from mcintosh_serial.frames import Frame
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from mcintosh_serial.state import DeviceState
 
 Matcher = Callable[[Frame], bool]
-Wait = Literal["command", "query", "power"]
+Wait = Literal["command", "query", "power", "volume", "optional"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,10 +27,10 @@ class Command:
     payload: str  # exact text to send, terminator included
     matches: Matcher  # the reply frame that completes the command
     wait: Wait = "command"  # which Timing value bounds the wait
+    _: KW_ONLY
     skip_if: Callable[[DeviceState], bool] | None = None  # already done: send nothing
-    required: bool = (
-        True  # False: a missing or rejected reply is tolerated (optional queries)
-    )
+    # False: a missing or rejected reply is tolerated (optional queries).
+    required: bool = True
 
 
 class Link(Protocol):
@@ -83,6 +83,10 @@ class Dialect(Protocol):
 
     def power(self, zone: int, *, on: bool) -> Command:
         """Turn a zone on or off."""
+        ...
+
+    async def after_power(self, link: Link, zone: int, *, on: bool) -> None:
+        """Run once a power command is confirmed (for setup the unit refuses in standby)."""
         ...
 
     def volume_set(self, zone: int, level: int) -> Command:

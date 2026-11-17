@@ -7,13 +7,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from mcintosh_serial.capture import Event
 from mcintosh_serial.client import Timing, ZonedClient
 from mcintosh_serial.errors import (
     McIntoshCommandError,
     McIntoshConnectionError,
     McIntoshTimeoutError,
 )
-from mcintosh_serial.testing import FakeMX119
+from mcintosh_serial.testing import FakeMX119, ReplayTransport
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -281,4 +282,21 @@ async def test_zero_settle_time_releases_the_next_command_immediately() -> None:
     client = ZonedClient(transport, Timing(command=0.5, query=1.0, settle=0.0))
     await client.start()
     assert client.state.zone(1).power is True
+    await client.stop()
+
+
+async def test_start_works_for_a_unit_whose_status_dump_does_not_start_with_power() -> (
+    None
+):
+    # Hypothetical: the C2500 may leave power out of its (QRY) reply; nothing confirms either way.
+    unit = ReplayTransport(
+        (
+            Event("tx", "(QRY)"),
+            Event("rx", "(INP Z1 3)\r\n(VST Z1 8)\r\n(MUT Z1 0)\r\n"),
+        )
+    )
+    client = ZonedClient(unit, FAST)
+    await client.start()
+    assert client.state.zone(1).volume == 8
+    assert client.state.zone(1).power is None  # not reported, so not guessed
     await client.stop()

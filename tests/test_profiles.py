@@ -67,6 +67,12 @@ def test_timing_can_be_overridden_per_model() -> None:
         (("zones = [1]", "zones = [0]"), "zones must be a list"),
         (('1 = "CD"', 'one = "CD"'), "input numbers must be integers"),
         (("baudrate = 9600", 'baudrate = "fast"'), "'baudrate' is required"),
+        (("[inputs]", "[timing]\nsetle = 0.4\n[inputs]"), "unknown timing setle"),
+        (("[inputs]", '[timing]\npower = "long"\n[inputs]'), "positive numbers"),
+        (("[inputs]", "[timing]\npower = true\n[inputs]"), "positive numbers"),
+        (("[inputs]", "[timing]\npower = 0\n[inputs]"), "positive numbers"),
+        (("zones = [1]", 'zones = [1]\nvolume_max = "max"'), "volume_max must be"),
+        (("zones = [1]", "zones = [1]\nvolume_max = 0"), "volume_max must be"),
     ],
 )
 def test_invalid_profiles_are_rejected_with_the_file_and_reason(

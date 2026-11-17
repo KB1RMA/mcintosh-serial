@@ -11,10 +11,13 @@
 * `Client.begin()`, `detect()`, capture recording (`RecordingTransport`) and `ReplayTransport`, so a contributor's capture becomes a regression test
 * emulators for the simple (`FakeMA352`) and bang (`FakeMX160`) styles, and a conformance suite that runs every model file against its style's emulator
 * contributor guide, issue forms and a pull request template
+* `Timing.volume` (volume sets, longer for the MA352 and MA5300, which ramp) and `Timing.optional` (optional queries, so unanswered ones cost about a second each)
+* `Dialect.after_power()`: the simple style turns status reporting on after power-on when the client started in standby
 
 ### Changed
 
 * `McIntoshCommandError` no longer mentions `(ERR n)`, since other styles report errors differently; `code` is the unit's error code or text
+* `Command`'s `skip_if` and `required` are keyword-only
 * `FakeMX119` moved into the `mcintosh_serial.testing` package (the import path is unchanged)
 
 ## [0.2.0](https://github.com/KB1RMA/mcintosh-serial/compare/v0.1.0...v0.2.0) (2026-11-17)

@@ -20,6 +20,7 @@ notes = "After power-on the unit is unresponsive for about 16 seconds; commands 
 
 [timing]
 power = 25.0
+volume = 10.0                # volume ramps to the target in 1 % steps; the ramp rate is not documented
 
 [references]
 projects = ["https://github.com/felix920506/mcintosh-ma352-hass"]

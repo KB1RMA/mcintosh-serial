@@ -27,10 +27,14 @@ errors is an assumption, and is flagged so below.
 | `!ZVOL(n)`, `!ZMUTEON`, `!ZSRC(n)` | zone 2 |
 
 ## What is assumed
-- **Set commands accept any reply line.** The library completes a set command on whichever line the unit sends
-  next, because the reply format is not documented. The state still updates from the lines it understands.
+- **Set commands accept the matching value line or any unknown line.** The reply format is not documented, so a set
+  command completes on a line naming its own value (`!VOL(40)` for `!VOL(40)`, `!POWER(...)` for `!PON`) or on any
+  line the library does not know. A reply to a *different* query (one that arrived late) does not complete it, so
+  replies cannot drift one command behind. The state still updates from the lines it understands.
 - **Errors look like `!ERR(n)`.** Nothing confirms this.
-- **Only the power query is required.** The other queries are optional, so a unit that does not answer one still starts.
+- **Only the power query is required.** The other queries are optional, so a unit that does not answer one still
+  starts. Each optional query waits only the `optional` timing (1 s by default), so unanswered ones cost seconds,
+  not half a minute.
 - **Zone 2 power is refused.** The other project reads zone 2 power with `!POWERZONE2?` but parses the reply as
   `!POWER(`, which would collide with zone 1, so the library raises `ValueError` until someone captures the real reply.
 - **No full-status command is known**, so the state is loaded with one query per value.

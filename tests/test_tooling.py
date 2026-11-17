@@ -13,6 +13,7 @@ from mcintosh_serial.capture import (
     events_from_jsonl,
     events_to_jsonl,
     redact,
+    redact_events,
 )
 from mcintosh_serial.detect import detect
 from mcintosh_serial.testing import (
@@ -63,6 +64,21 @@ def test_events_survive_a_round_trip_including_odd_bytes() -> None:
 def test_serial_numbers_are_redacted() -> None:
     assert redact("(Serial Number: AFP1234)") == "(Serial Number: <redacted>)"
     assert redact("(PWR 1)") == "(PWR 1)"
+
+
+def test_a_serial_number_split_across_reads_is_still_redacted() -> None:
+    events = (
+        Event("tx", "(QRY)", 0.0),
+        Event("rx", "(Serial Num", 0.1),
+        Event("rx", "ber: AHW1234)\r\n", 0.2),
+        Event("tx", "(PWR 1)", 0.3),
+    )
+    redacted = redact_events(events)
+    assert "AHW1234" not in events_to_jsonl(redacted)
+    assert redacted[1] == Event("rx", "(Serial Number: <redacted>)\r\n", 0.1)
+    assert [e.direction for e in redacted] == ["tx", "rx", "tx"]
+    report = Report("1.0", "ma352", "simple", 115200, "socket", "ok", events)
+    assert "AHW1234" not in report.render()
 
 
 async def test_a_recording_transport_notes_both_directions() -> None:
@@ -239,10 +255,10 @@ def test_capture_command_writes_a_redacted_report_and_a_capture_file(
     assert "<redacted>" in printed
     assert "Link: socket" in printed
     assert "example" not in printed  # the host name is not revealed
-    assert (
-        "AHW0001" in out_file.read_text()
-    )  # the file attached to the issue keeps raw bytes
-    assert events_from_jsonl(out_file.read_text())
+    saved = out_file.read_text()
+    assert "AHW0001" not in saved  # the file attached to the issue is redacted too
+    assert "<redacted>" in saved
+    assert events_from_jsonl(saved)
 
 
 def test_capture_command_can_show_the_serial_number(
@@ -265,6 +281,28 @@ def test_capture_command_can_show_the_serial_number(
     ]
     assert cli.main(args) == 0
     assert "AHW0001" in capsys.readouterr().out
+    assert "AHW0001" in (tmp_path / "c.jsonl").read_text()
+
+
+def test_capture_command_does_not_reveal_the_host_when_the_link_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    class Unreachable(Silent):
+        @override
+        async def write(self, data: bytes) -> None:
+            message = "could not reach amp.example.lan"
+            raise OSError(message)
+
+    async def fake_open(_url: str, _baud: int) -> Transport:
+        return Unreachable()
+
+    monkeypatch.setattr(cli, "open_serial", fake_open)
+    args = ["capture", "x", "--model", "mx119", "--listen", "0"]
+    args += ["--out", str(tmp_path / "c.jsonl")]
+    assert cli.main(args) == 0
+    printed = capsys.readouterr().out
+    assert "connection failed" in printed
+    assert "amp.example.lan" not in printed
 
 
 def test_capture_command_reports_a_unit_that_does_not_answer(

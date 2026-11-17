@@ -1,6 +1,7 @@
 # McIntosh C2500 preamplifier. Built from a Home Assistant ESPHome gist by the C2500's owner, who reports
 # power, volume and input working over the zoned command style; not confirmed here.
-# See docs/protocols/zoned.md. Note the owner reports power state is not reported back.
+# See docs/protocols/zoned.md. The gist does not parse power replies, so whether the unit reports power
+# (and starts its (QRY) reply with (PON Z1)/(POF Z1) as the MX119 does) is not known.
 id = "c2500"
 name = "McIntosh C2500"
 dialect = "zoned"

@@ -27,6 +27,7 @@ notes = "While the amplifier is in standby only (PWR) and product information ar
 
 [timing]
 power = 25.0
+volume = 10.0                # volume ramps to the target in 1 % steps; the ramp rate is not documented
 
 [references]
 projects = ["https://github.com/The-sultan/esphome-mcintosh-ma5300"]

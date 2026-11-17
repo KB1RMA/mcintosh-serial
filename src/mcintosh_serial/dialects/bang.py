@@ -47,9 +47,17 @@ def _reply(name: str) -> Matcher:
     return lambda frame: frame.name == name
 
 
-def _any_reply(_frame: Frame) -> bool:
-    """Set commands: the reply format is unconfirmed, so any line completes them."""
-    return True
+# Names of the replies to the library's queries.
+_QUERY_REPLIES = frozenset({*_FIELDS, "DEVICE", "PONG"})
+
+
+def _set_reply(*names: str) -> Matcher:
+    """Match a set command's reply, whose format is unconfirmed.
+
+    Accept the line naming the command's own value, or any line we do not know, but not a
+    reply to some other query that arrived late.
+    """
+    return lambda frame: frame.name in names or frame.name not in _QUERY_REPLIES
 
 
 def _parse_line(line: str) -> Frame | None:
@@ -110,14 +118,14 @@ class BangDialect:
     def query_commands(self) -> tuple[Command, ...]:
         """Ask for each value in turn; only the power query is required."""
         return (
-            Command(_command("!DEVICE?"), _reply("DEVICE"), "query", required=False),
+            Command(_command("!DEVICE?"), _reply("DEVICE"), "optional", required=False),
             Command(_command("!POWER?"), _reply("POWER"), "query"),
-            Command(_command("!VOL?"), _reply("VOL"), "query", required=False),
-            Command(_command("!MUTE?"), _reply("MUTE"), "query", required=False),
-            Command(_command("!SRC?"), _reply("SRC"), "query", required=False),
-            Command(_command("!ZVOL?"), _reply("ZVOL"), "query", required=False),
-            Command(_command("!ZMUTE?"), _reply("ZMUTE"), "query", required=False),
-            Command(_command("!ZSRC?"), _reply("ZSRC"), "query", required=False),
+            Command(_command("!VOL?"), _reply("VOL"), "optional", required=False),
+            Command(_command("!MUTE?"), _reply("MUTE"), "optional", required=False),
+            Command(_command("!SRC?"), _reply("SRC"), "optional", required=False),
+            Command(_command("!ZVOL?"), _reply("ZVOL"), "optional", required=False),
+            Command(_command("!ZMUTE?"), _reply("ZMUTE"), "optional", required=False),
+            Command(_command("!ZSRC?"), _reply("ZSRC"), "optional", required=False),
         )
 
     def probe(self) -> Command:
@@ -127,7 +135,7 @@ class BangDialect:
     async def handshake(self, link: Link) -> None:
         """Set the verbosity the other projects use, then load state."""
         with contextlib.suppress(McIntoshCommandError, McIntoshTimeoutError):
-            await link.exchange(Command(_command(f"!VERB({_VERBOSITY})"), _any_reply))
+            await link.exchange(Command(_command(f"!VERB({_VERBOSITY})"), _set_reply()))
             # a unit that does not take this still answers the queries
         await link.query()
 
@@ -136,25 +144,29 @@ class BangDialect:
         if zone != _MAIN:
             message = "zone 2 power is not supported: its reply format is not known"
             raise ValueError(message)
-        return Command(_command("!PON" if on else "!POFF"), _any_reply, "power")
+        return Command(
+            _command("!PON" if on else "!POFF"), _set_reply("POWER"), "power"
+        )
+
+    async def after_power(self, link: Link, zone: int, *, on: bool) -> None:
+        """Nothing to do: no setup is known to be needed after power changes."""
 
     def volume_set(self, zone: int, level: int) -> Command:
         """Set a zone's volume."""
-        return Command(_command(f"!{_names(zone, 'VOL', 'ZVOL')}({level})"), _any_reply)
+        name = _names(zone, "VOL", "ZVOL")
+        return Command(_command(f"!{name}({level})"), _set_reply(name), "volume")
 
     def volume_step(self, zone: int, *, up: bool) -> Command:
         """Raise or lower a zone's volume by one step."""
-        return Command(
-            _command(f"!{_names(zone, 'VOL', 'ZVOL')}{'+' if up else '-'}"), _any_reply
-        )
+        name = _names(zone, "VOL", "ZVOL")
+        return Command(_command(f"!{name}{'+' if up else '-'}"), _set_reply(name))
 
     def mute(self, zone: int, *, muted: bool) -> Command:
         """Mute or unmute a zone."""
         base = _names(zone, "MUTE", "ZMUTE")
-        return Command(_command(f"!{base}{'ON' if muted else 'OFF'}"), _any_reply)
+        return Command(_command(f"!{base}{'ON' if muted else 'OFF'}"), _set_reply(base))
 
     def select_input(self, zone: int, number: int) -> Command:
         """Select an input for a zone."""
-        return Command(
-            _command(f"!{_names(zone, 'SRC', 'ZSRC')}({number})"), _any_reply
-        )
+        name = _names(zone, "SRC", "ZSRC")
+        return Command(_command(f"!{name}({number})"), _set_reply(name))

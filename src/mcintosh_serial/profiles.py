@@ -4,7 +4,7 @@ Each model is one TOML file in ``mcintosh_serial/models``. A model that speaks a
 dialect the library already knows needs nothing else, so adding one is a data change.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 import functools
 from importlib import resources
 import tomllib
@@ -54,6 +54,34 @@ def _require[T](data: Mapping[str, Any], key: str, kind: type[T], source: str) -
     return value
 
 
+_TIMING_KEYS = frozenset(field.name for field in fields(Timing))
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _timing(data: Mapping[str, Any], source: str) -> Timing:
+    raw = cast("dict[str, Any]", data.get("timing", {}))
+    unknown = sorted(set(raw) - _TIMING_KEYS)
+    if unknown:
+        message = f"{source}: unknown timing {', '.join(unknown)} (known: {', '.join(sorted(_TIMING_KEYS))})"
+        raise ProfileError(message)
+    if not all(_is_number(value) and value > 0 for value in raw.values()):
+        message = f"{source}: timing values must be positive numbers of seconds"
+        raise ProfileError(message)
+    return Timing(**{key: float(value) for key, value in raw.items()})
+
+
+def _volume_max(data: Mapping[str, Any], source: str) -> int | None:
+    value = data.get("volume_max")
+    valid = isinstance(value, int) and not isinstance(value, bool) and value > 0
+    if value is not None and not valid:
+        message = f"{source}: volume_max must be a positive integer"
+        raise ProfileError(message)
+    return value
+
+
 def parse_profile(data: Mapping[str, Any], source: str) -> Profile:
     """Validate parsed TOML and build a Profile; ``source`` names the file in errors."""
     profile_id = _require(data, "id", str, source)
@@ -85,9 +113,9 @@ def parse_profile(data: Mapping[str, Any], source: str) -> Profile:
         baudrate=_require(data, "baudrate", int, source),
         zones=zones,
         inputs=MappingProxyType(inputs),
-        volume_max=cast("int | None", data.get("volume_max")),
+        volume_max=_volume_max(data, source),
         connector=_require(data, "connector", str, source),
-        timing=Timing(**cast("dict[str, float]", data.get("timing", {}))),
+        timing=_timing(data, source),
         documents=tuple(references.get("documents", ())),
         references=tuple(references.get("projects", ())),
         notes=str(data.get("notes", "")),

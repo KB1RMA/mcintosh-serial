@@ -110,6 +110,31 @@ async def test_start_turns_status_reporting_on_when_it_is_off(
     assert client.state.status_push is True
 
 
+async def test_status_reporting_is_turned_on_after_power_on_from_standby(
+    rig: tuple[FakeMA352, Client],
+) -> None:
+    device, client = rig
+    device.values["PWR"], device.values["STA"] = 0, 0
+    await client.start()
+    assert client.state.status_push is None  # standby: (QRY) does not say
+    assert "STA 1" not in device.received  # and the unit would refuse it
+    await client.set_power(1, on=True)
+    assert device.values["STA"] == 1
+    await device.front_panel_volume(40)
+    await asyncio.sleep(0.05)
+    assert client.state.zone(1).volume == 40
+
+
+async def test_power_on_leaves_status_reporting_alone_when_it_is_on(
+    rig: tuple[FakeMA352, Client],
+) -> None:
+    device, client = rig
+    await client.start()
+    await client.set_power(1, on=False)
+    await client.set_power(1, on=True)
+    assert "STA 1" not in device.received
+
+
 async def test_volume_ramps_and_the_client_waits_for_the_target(
     rig: tuple[FakeMA352, Client],
 ) -> None:
@@ -254,6 +279,21 @@ async def test_an_unacknowledged_status_enable_is_not_an_error() -> None:
     )
     await client.start()
     assert client.connected
+    await client.stop()
+
+
+async def test_a_refused_status_enable_is_not_an_error() -> None:
+    def reply(text: str) -> list[str]:
+        if "QRY" in text:
+            return ["(MA352)\r\n", "(PWR 1)\r\n", "(STA 0)\r\n"]
+        return ["(ERROR - Invalid Command)\r\n"]
+
+    client = Client(
+        Scripted(reply), DIALECT, Timing(command=0.1, query=0.5, settle=0.02)
+    )
+    await client.start()
+    assert client.connected
+    assert client.state.status_push is False
     await client.stop()
 
 

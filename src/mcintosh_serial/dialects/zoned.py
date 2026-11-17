@@ -118,8 +118,17 @@ def _reply(name: str, zone: int, value: str | None = None) -> Matcher:
     return lambda frame: frame.name == name and frame.args[: len(wanted)] == wanted
 
 
+_STATUS_NAMES = frozenset({"PON", "POF", "VST", "INP", "MUT"})
+
+
 def _is_status_start(frame: Frame) -> bool:
-    return frame.name in ("PON", "POF")
+    """Complete ``(QRY)`` on its first zone status line.
+
+    The MX119 starts its reply with ``(PON Z1)`` or ``(POF Z1)``. Other units in this style
+    (the C2500 among them) are not confirmed to, so any zone status line counts; the settle
+    wait that follows collects the rest of the dump.
+    """
+    return frame.name in _STATUS_NAMES and _zone_of(frame) is not None
 
 
 def _is_ctl_echo(frame: Frame) -> bool:
@@ -169,9 +178,14 @@ class ZonedDialect:
             power(zone, on=on), _reply("PON" if on else "POF", zone), "power"
         )
 
+    async def after_power(self, link: Link, zone: int, *, on: bool) -> None:
+        """Nothing to do: the MX119 needs no setup after power changes."""
+
     def volume_set(self, zone: int, level: int) -> Command:
         """Set a zone's volume."""
-        return Command(volume_set(zone, level), _reply("VST", zone, str(level)))
+        return Command(
+            volume_set(zone, level), _reply("VST", zone, str(level)), "volume"
+        )
 
     def volume_step(self, zone: int, *, up: bool) -> Command:
         """Raise or lower a zone's volume by one step."""

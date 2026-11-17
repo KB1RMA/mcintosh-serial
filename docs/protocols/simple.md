@@ -24,11 +24,12 @@ marked *reported* below comes from those, not from us.
 | `(VOL n)` / `(VOL U)` / `(VOL D)` | Volume 0-100 %, or one step up or down. |
 | `(MUT 1)` / `(MUT 0)` | Mute. |
 | `(INP n)` | Input; numbers depend on the model (see the model files). |
-| `(STA 1)` | Push status changes. The library sends it only if `(QRY)` reported `(STA 0)`. |
+| `(STA 1)` | Push status changes. The library sends it if `(QRY)` reported `(STA 0)`, and after power-on unless `(STA 1)` was seen (in standby `(QRY)` does not report it and the unit refuses it). |
 
 ## Behavior to design around (reported for the MA352)
 - After power-on the unit is unresponsive for about 16 s. Commands sent meanwhile are queued, not dropped.
-- Absolute volume changes ramp in 1 % steps and every step is pushed, so the library waits for the target value.
+- Absolute volume changes ramp in 1 % steps and every step is pushed, so the library waits for the target value,
+  up to the model's `volume` timing (10 s; the ramp rate is not documented).
 - A `VOL` set that leaves the value unchanged is not acknowledged, so the library does not send one.
 - Relative commands are acknowledged with the resulting absolute value.
 - Back-to-back commands are all processed in order; there is no rate limit.

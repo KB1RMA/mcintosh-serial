@@ -5,7 +5,8 @@ command writes them; ``mcintosh_serial.testing.ReplayTransport`` plays them back
 so a contributor's capture becomes a regression test for their model.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import functools
 import json
 import re
 from time import monotonic
@@ -46,6 +47,24 @@ def events_from_jsonl(text: str) -> tuple[Event, ...]:
 def redact(text: str) -> str:
     """Hide the unit's serial number so a capture can be posted publicly."""
     return _SERIAL_NUMBER.sub(r"\1<redacted>", text)
+
+
+def _join(merged: tuple[Event, ...], event: Event) -> tuple[Event, ...]:
+    last = merged[-1] if merged else None
+    if last is not None and last.direction == event.direction == "rx":
+        return (*merged[:-1], Event("rx", last.data + event.data, last.t))
+    return (*merged, event)
+
+
+def redact_events(events: tuple[Event, ...]) -> tuple[Event, ...]:
+    """Hide serial numbers in a capture, including one split across several reads.
+
+    Consecutive ``rx`` events are joined first (keeping the first one's time), because a
+    serial line delivers a reply in whatever chunks it likes.
+    """
+    empty: tuple[Event, ...] = ()
+    joined = functools.reduce(_join, events, empty)
+    return tuple(replace(e, data=redact(e.data)) for e in joined)
 
 
 class RecordingTransport:
@@ -92,10 +111,8 @@ class Report:
 
     def render(self, *, redact_serial: bool = True) -> str:
         """Build the Markdown that goes into a "new device" issue."""
-        lines = [
-            f"{e.t:7.3f} {e.direction.upper()}  {(redact(e.data) if redact_serial else e.data)!r}"
-            for e in self.events
-        ]
+        events = redact_events(self.events) if redact_serial else self.events
+        lines = [f"{e.t:7.3f} {e.direction.upper()}  {e.data!r}" for e in events]
         transcript = "\n".join(lines) or "(nothing was sent or received)"
         return (
             "## McIntosh capture\n\n"

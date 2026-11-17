@@ -7,13 +7,14 @@ document and from the behavior reported by the mcintosh-ma352-hass project;
 not yet confirmed on hardware with this library. See docs/protocols/simple.md.
 """
 
+import contextlib
 from dataclasses import replace
 import re
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from mcintosh_serial.dialects.base import Command, Link, Matcher
-from mcintosh_serial.errors import McIntoshTimeoutError
+from mcintosh_serial.errors import McIntoshCommandError, McIntoshTimeoutError
 from mcintosh_serial.frames import Frame, parse_frames
 
 if TYPE_CHECKING:
@@ -47,6 +48,13 @@ def _is_model(frame: Frame) -> bool:
 
 def _is_status_start(frame: Frame) -> bool:
     return frame.name == "PWR" or _is_model(frame)
+
+
+async def _enable_status_push(link: Link) -> None:
+    # A unit already pushing does not acknowledge this; one that refuses it still works,
+    # it just will not push changes. Neither should fail startup or power-on.
+    with contextlib.suppress(McIntoshCommandError, McIntoshTimeoutError):
+        await link.exchange(Command(_command("STA", 1), _echo("STA", "1")))
 
 
 def _set_zone(state: DeviceState, **changes: object) -> DeviceState:
@@ -115,10 +123,17 @@ class SimpleDialect:
         """Load state, then make sure the unit pushes its changes."""
         await link.query()
         if link.state.status_push is False:
-            try:
-                await link.exchange(Command(_command("STA", 1), _echo("STA", "1")))
-            except McIntoshTimeoutError:
-                return  # a unit already pushing does not acknowledge this
+            await _enable_status_push(link)
+
+    async def after_power(self, link: Link, zone: int, *, on: bool) -> None:
+        """After power-on, turn status reporting on if it was not seen to be on.
+
+        In standby ``(QRY)`` does not report ``STA`` and the unit refuses ``(STA 1)``, so a
+        client started in standby only learns the setting once the amplifier is on.
+        """
+        _check_zone(zone)
+        if on and link.state.status_push is not True:
+            await _enable_status_push(link)
 
     def power(self, zone: int, *, on: bool) -> Command:
         """Turn the amplifier on or off (about 16 s of start-up follow power-on)."""
@@ -131,6 +146,7 @@ class SimpleDialect:
         return Command(
             _command("VOL", level),
             _echo("VOL", str(level)),
+            "volume",
             skip_if=lambda state: state.zone(_ONE_ZONE).volume == level,
         )
 

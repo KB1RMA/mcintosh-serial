@@ -213,3 +213,29 @@ async def test_a_silent_unit_times_out_on_the_required_query() -> None:
     with pytest.raises(McIntoshTimeoutError):
         await client.start()
     await client.stop()
+
+
+async def test_unanswered_optional_queries_wait_only_the_optional_timing() -> None:
+    def reply(text: str) -> list[str]:
+        return ["!POWER(1)\r"] if "POWER?" in text else []
+
+    slow_queries = Timing(command=0.05, query=5.0, optional=0.02, settle=0.01)
+    client = Client(Scripted(reply), DIALECT, slow_queries)
+    await asyncio.wait_for(client.start(), 1.0)  # seven 5 s waits would take 35 s
+    await client.stop()
+
+
+async def test_a_late_reply_to_another_query_does_not_complete_a_set_command() -> None:
+    def reply(text: str) -> list[str]:
+        if "VOL(40)" in text:
+            return ['!ZSRC(3) "HDMI 4"\r', "!VOL(40)\r"]  # a late zone 2 reply first
+        if "SRC(2)" in text:
+            return ["!OK\r"]  # an unknown reply still completes a set command
+        return []
+
+    client = Client(Scripted(reply), DIALECT, FAST)
+    client.begin()
+    assert (await client.exchange(DIALECT.volume_set(1, 40))).name == "VOL"
+    assert client.state.zone(2).input == 3  # the late line still updates the state
+    assert (await client.exchange(DIALECT.select_input(1, 2))).name == "OK"
+    await client.stop()

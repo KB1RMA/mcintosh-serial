@@ -15,11 +15,12 @@ from mcintosh_serial.capture import (
     RecordingTransport,
     Report,
     events_to_jsonl,
+    redact_events,
 )
 from mcintosh_serial.client import Client, Timing
 from mcintosh_serial.detect import COMMON_BAUDRATES, detect
 from mcintosh_serial.dialects import DIALECTS, get_dialect
-from mcintosh_serial.errors import McIntoshError
+from mcintosh_serial.errors import McIntoshConnectionError, McIntoshError
 from mcintosh_serial.profiles import get_profile, load_profiles
 from mcintosh_serial.transport import Transport, open_serial
 
@@ -108,11 +109,15 @@ async def _capture(args: argparse.Namespace) -> int:
             f"zone {n}: {state}" for n, state in sorted(client.state.zones.items())
         )
         outcome = f"The unit answered and its state loaded. {zones}"
+    except McIntoshConnectionError:
+        # The OSError text can name the host or device path, which the report must not show.
+        outcome = "Startup failed: the connection failed or was closed."
     except McIntoshError as err:
         outcome = f"Startup failed: {err}"
     await client.stop()
 
-    events = tuple(recorder.events)
+    raw = tuple(recorder.events)
+    events = raw if args.no_redact else redact_events(raw)
     out = Path(args.out or f"mcintosh-capture-{model}.jsonl")
     await asyncio.to_thread(out.write_text, events_to_jsonl(events), encoding="utf-8")
     report = Report(
@@ -124,7 +129,9 @@ async def _capture(args: argparse.Namespace) -> int:
         outcome,
         events,
     )
-    print(report.render(redact_serial=not args.no_redact))
+    print(
+        report.render(redact_serial=False)
+    )  # events are already redacted unless asked
     print(f"Capture file (attach it to the issue): {out}")
     return 0
 
@@ -174,7 +181,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--out", help="capture file to write (default mcintosh-capture-<model>.jsonl)"
     )
     cap.add_argument(
-        "--no-redact", action="store_true", help="show the serial number in the report"
+        "--no-redact",
+        action="store_true",
+        help="keep the serial number in the report and the capture file",
     )
 
     args = parser.parse_args(argv)
