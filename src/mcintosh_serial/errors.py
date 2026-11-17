@@ -1,0 +1,26 @@
+"""Exceptions raised by the client."""
+
+
+class McIntoshError(Exception):
+    """Base class for all library errors."""
+
+
+class McIntoshConnectionError(McIntoshError):
+    """The transport closed or could not be used."""
+
+
+class McIntoshTimeoutError(McIntoshError):
+    """The unit did not send the expected reply in time."""
+
+    def __init__(self, command: str) -> None:
+        super().__init__(f"no reply to {command}")
+        self.command = command
+
+
+class McIntoshCommandError(McIntoshError):
+    """The unit answered ``(ERR n)``."""
+
+    def __init__(self, code: str, command: str) -> None:
+        super().__init__(f"{command} rejected with (ERR {code})")
+        self.code = code
+        self.command = command

@@ -1,0 +1,86 @@
+name: Release
+
+# Pushing a version tag publishes to PyPI and creates the GitHub release.
+#
+# Releases are immutable, so a release's files can't be added once it's
+# published. The release is created as a draft with the wheel and sdist
+# attached, then published.
+#
+# The release notes are the tag's message, so write them in the annotated
+# tag. --cleanup=verbatim keeps Markdown headings, which git otherwise
+# strips as comments: git tag -s v1.2.3 --cleanup=verbatim -F notes.md
+#
+# One-time setup: on PyPI, add a trusted publisher for this repository
+# (workflow: release.yml, environment: pypi), and create the `pypi` environment
+# on GitHub.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the tag matches the package version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          test "v$version" = "${GITHUB_REF_NAME}"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - run: uv build
+      - run: uvx twine check dist/*
+      - name: Acceptance tests against the built wheel
+        run: >
+          uv run --no-project --isolated
+          --with ./dist/*.whl --with pytest==9.0.3 --with pytest-asyncio==1.4.0
+          pytest -o addopts="" -p no:cacheprovider tests/acceptance
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/mcintosh-serial/
+    permissions:
+      id-token: write # PyPI trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: GitHub release
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Create the release with the packages attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --verify-tag --draft --title "${GITHUB_REF_NAME}" --notes-from-tag
+          gh release edit "${GITHUB_REF_NAME}" --draft=false

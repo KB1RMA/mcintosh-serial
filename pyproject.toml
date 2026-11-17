@@ -1,0 +1,105 @@
+[project]
+name = "mcintosh-serial"
+version = "0.0.0"
+description = "Async Python library for controlling McIntosh receivers, preamps and amplifiers over RS232."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.14.2"
+keywords = ["mcintosh", "rs232", "serial", "home-assistant", "audio"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Home Automation",
+    "Typing :: Typed",
+]
+dependencies = ["pyserial-asyncio-fast>=0.16"]
+
+[project.urls]
+Homepage = "https://github.com/KB1RMA/mcintosh-serial"
+Repository = "https://github.com/KB1RMA/mcintosh-serial"
+Issues = "https://github.com/KB1RMA/mcintosh-serial/issues"
+Changelog = "https://github.com/KB1RMA/mcintosh-serial/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+    "pytest==9.0.3",
+    "pytest-asyncio==1.4.0",
+    "pytest-cov==7.1.0",
+    "pyright==1.1.414",
+    "ruff==0.17.5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcintosh_serial"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "LICENSE", "README.md", "CHANGELOG.md"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "--cov=mcintosh_serial --cov-report=term-missing --cov-fail-under=100"
+
+[tool.coverage.run]
+branch = true
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "CPY001",  # the licence is in LICENSE
+    "D107",    # __init__ is documented on the class
+    "E501",    # the formatter handles line length
+    "COM812",  # conflicts with the formatter
+    "D203",    # conflicts with D211
+    "D213",    # conflicts with D212
+    "ISC001",  # conflicts with the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",     # pytest asserts
+    "PLR2004",  # literal values in asserts
+    "SLF001",
+    "D",
+    "ANN401",
+    "PLR0913",  # pytest fixtures are arguments
+    "PLR0917",
+    "FBT001",   # parametrized flags
+    "INP001",   # tests are not a package
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-sort-within-sections = true
+
+[tool.pyright]
+include = ["src", "tests"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = "none"
+reportPrivateUsage = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportImplicitOverride = "error"
+reportUninitializedInstanceVariable = "error"
+
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = ["src"]
+reportPrivateUsage = "none"
+
+[[tool.pyright.executionEnvironments]]
+root = "src"
