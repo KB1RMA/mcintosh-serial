@@ -3,8 +3,7 @@
 import contextlib
 from typing import TYPE_CHECKING, Protocol
 
-import serial
-import serial_asyncio_fast
+import serialx
 
 if TYPE_CHECKING:
     import asyncio
@@ -54,18 +53,12 @@ class StreamTransport:
 
 
 async def open_serial(url: str, baudrate: int = 9600) -> StreamTransport:
-    """Open a serial device path or pyserial URL, 8N1, no flow control.
+    """Open a serial port by device path or URL, 8N1, no flow control.
 
-    URLs such as ``socket://host:port`` reach a network serial server, and
-    ``loop://`` echoes everything back, which is handy in tests.
+    Uses ``serialx`` (the driver Home Assistant itself uses), so besides device paths
+    it accepts ``socket://host:port`` and ``rfc2217://host:port`` URLs for network
+    serial servers and, inside Home Assistant, ``esphome-hass://`` URLs for the serial
+    ports of ESPHome devices such as the Home Assistant Connect AUX-2.
     """
-    reader, writer = await serial_asyncio_fast.open_serial_connection(
-        url=url,
-        baudrate=baudrate,
-        bytesize=serial.EIGHTBITS,
-        parity=serial.PARITY_NONE,
-        stopbits=serial.STOPBITS_ONE,
-        xonxoff=False,
-        rtscts=False,
-    )
+    reader, writer = await serialx.open_serial_connection(url=url, baudrate=baudrate)
     return StreamTransport(reader, writer)
