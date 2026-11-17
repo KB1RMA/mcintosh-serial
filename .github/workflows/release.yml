@@ -41,7 +41,7 @@ jobs:
           uv run --no-project --isolated
           --with ./dist/*.whl --with pytest==9.0.3 --with pytest-asyncio==1.4.0
           pytest -o addopts="" -p no:cacheprovider tests/acceptance
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
