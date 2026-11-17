@@ -1,6 +1,6 @@
 [project]
 name = "mcintosh-serial"
-version = "0.1.0"
+version = "0.2.0"
 description = "Async Python library for controlling McIntosh receivers, preamps and amplifiers over RS232."
 readme = "README.md"
 license = "MIT"
@@ -18,6 +18,11 @@ classifiers = [
 dependencies = [
     "serialx>=1.11.0",
 ]
+
+[project.optional-dependencies]
+# Lets open_serial reach an ESPHome device directly (esphome://host:6053/?port_name=...)
+# when not running inside Home Assistant.
+esphome = ["serialx[esphome]>=1.11.0"]
 
 [project.urls]
 Homepage = "https://github.com/KB1RMA/mcintosh-serial"

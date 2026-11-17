@@ -44,6 +44,11 @@ serial driver Home Assistant uses. That covers `socket://host:port` and `rfc2217
 serial servers and, inside Home Assistant, `esphome-hass://` URLs for the serial ports of ESPHome devices such
 as the Home Assistant Connect AUX-2. The baud rate is passed along where the link supports it (device paths
 and ESPHome serial proxies); a `socket://` server has its own fixed baud rate.
+
+Outside Home Assistant you can reach an ESPHome device's serial proxy directly with
+`pip install "mcintosh-serial[esphome]"` and a URL such as
+`esphome://192.168.1.42:6053/?port_name=RS-232%20Port%201&key=...`.
+
 Volume is the unit's own step number; input numbers are the unit's own too (on an MX119, 0 Tuner, 1 PH/AUX,
 2 CD 2, 3 SAT, 4 TV, 5 DVD, 6 VCR 1, 7 Tape 1, unless relabeled in its menu).
 
