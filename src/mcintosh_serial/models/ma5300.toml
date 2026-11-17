@@ -1,0 +1,34 @@
+# McIntosh MA5300 integrated amplifier. Built from McIntosh's "MA5300 External Control Rev A" and the
+# esphome-mcintosh-ma5300 project; not yet confirmed on hardware with this library.
+id = "ma5300"
+name = "McIntosh MA5300"
+dialect = "simple"
+status = "reported"
+baudrate = 115200            # the default; the amplifier's setup menu can change it
+volume_max = 100
+connector = "3.5 mm TRS: tip = TX (from the unit), ring = RX (to the unit), sleeve = ground"
+zones = [1]
+notes = "While the amplifier is in standby only (PWR) and product information are answered; every other command returns an error."
+
+[inputs]
+1 = "BAL"
+2 = "UNBAL 1"
+3 = "UNBAL 2"
+4 = "UNBAL 3"
+5 = "UNBAL 4"
+6 = "MM PHONO"
+7 = "COAX 1"
+8 = "COAX 2"
+9 = "OPTI 1"
+10 = "OPTI 2"
+11 = "USB"
+12 = "MCT"
+13 = "HDMI"                  # DA2 module models only
+
+[timing]
+power = 25.0
+volume = 10.0                # volume ramps to the target in 1 % steps; the ramp rate is not documented
+
+[references]
+projects = ["https://github.com/The-sultan/esphome-mcintosh-ma5300"]
+documents = ["MA5300 External Control Rev A (McIntosh)"]

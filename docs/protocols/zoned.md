@@ -39,5 +39,11 @@ They can be relabeled in the unit's menu, so names are per-installation.
 - **Errors:** `(ERR 1)` unknown command or empty; `(ERR 3)` invalid zone. (The application note says ERR 2 for a bad zone; this unit does not.)
 - **Standby:** `(QRY)` still answers in standby.
 
+## Other units in this style (not confirmed)
+- The library completes `(QRY)` on the first zone status line (`PON`, `POF`, `VST`, `INP` or `MUT`), not only on
+  `(PON Z1)`/`(POF Z1)`, because units other than the MX119 are not confirmed to start the dump with power.
+- McIntosh's application note says some units (the C2500, MA5200) need `(PON Z1)` sent twice, 100 ms apart, from
+  standby. The library sends it once; that is not implemented until a capture shows it is needed.
+
 ## Not tested
 `(SY0)`, `(HLP)` (answers ERR 1), `(OP1)`/`(OP2)`, `(TRU)`/`(TRD)`, `(KEY)`, Zone 2 commands, volume ceiling, behavior after a long power loss.

@@ -1,8 +1,8 @@
-"""Async client for the zoned dialect.
+"""Async client, generic over the command style (dialect).
 
 One command is in flight at a time. After the expected reply arrives the client
 waits for the line to go quiet before releasing the next command, because the
-unit drops commands that arrive while it is still sending a reply.
+units drop commands that arrive while they are still sending a reply.
 """
 
 import asyncio
@@ -13,63 +13,60 @@ import logging
 from time import monotonic
 from typing import TYPE_CHECKING
 
-from mcintosh_serial.dialects import zoned
+from mcintosh_serial.dialects import get_dialect
+from mcintosh_serial.dialects.zoned import ZonedDialect
 from mcintosh_serial.errors import (
     McIntoshCommandError,
     McIntoshConnectionError,
     McIntoshTimeoutError,
 )
-from mcintosh_serial.frames import Frame, parse_frames
+from mcintosh_serial.state import DeviceState
 
 if TYPE_CHECKING:
+    from mcintosh_serial.dialects.base import Command, Dialect, Wait
+    from mcintosh_serial.frames import Frame
+    from mcintosh_serial.profiles import Profile
     from mcintosh_serial.transport import Transport
 
 _LOGGER = logging.getLogger(__name__)
 
-Listener = Callable[[zoned.DeviceState], None]
+Listener = Callable[[DeviceState], None]
 ConnectionListener = Callable[[bool], None]
-Matcher = Callable[[Frame], bool]
 
 
 @dataclass(frozen=True, slots=True)
 class Timing:
-    """Seconds. Defaults come from the MX119; override in tests."""
+    """Seconds. Defaults come from the MX119; override per model or in tests."""
 
     command: float = 2.0
     query: float = 4.0
     power: float = 12.0
+    volume: float = 2.0  # a volume set; longer for units that ramp to the target
+    optional: float = 1.0  # an optional query, which some units never answer
     settle: float = 0.3  # quiet time after a reply before the next command
     settle_max: float = 3.0
-    retry_delay: float = 1.0  # wait before retrying a (QRY) rejected after power-up
+    retry_delay: float = 1.0  # wait before retrying a query rejected after power-up
 
 
 @dataclass(slots=True)
 class _Pending:
-    command: str
-    matches: Matcher
+    command: Command
     future: asyncio.Future[Frame]
 
 
-def _reply(name: str, zone: int, value: str | None = None) -> Matcher:
-    wanted = (f"Z{zone}",) if value is None else (f"Z{zone}", value)
-    return lambda frame: frame.name == name and frame.args[: len(wanted)] == wanted
+class Client:
+    """Talk to one McIntosh unit using the given dialect."""
 
-
-def _is_status_start(frame: Frame) -> bool:
-    return frame.name in ("PON", "POF")
-
-
-def _is_ctl_echo(frame: Frame) -> bool:
-    return frame.name == "CTL"
-
-
-class ZonedClient:
-    """Talk to one McIntosh unit that speaks the zoned dialect."""
-
-    def __init__(self, transport: Transport, timing: Timing | None = None) -> None:
+    def __init__(
+        self,
+        transport: Transport,
+        dialect: Dialect,
+        timing: Timing | None = None,
+    ) -> None:
         self._transport = transport
+        self._dialect = dialect
         self._timing = timing or Timing()
-        self._state = zoned.DeviceState()
+        self._state = DeviceState()
         self._listeners: list[Listener] = []
         self._connection_listeners: list[ConnectionListener] = []
         self._connected = False
@@ -81,7 +78,12 @@ class ZonedClient:
 
     # ------------------------------------------------------------ lifecycle
     @property
-    def state(self) -> zoned.DeviceState:
+    def dialect(self) -> Dialect:
+        """The command style this client speaks."""
+        return self._dialect
+
+    @property
+    def state(self) -> DeviceState:
         """The last state the unit reported."""
         return self._state
 
@@ -108,16 +110,15 @@ class ZonedClient:
             for listener in tuple(self._connection_listeners):
                 listener(connected)
 
+    def begin(self) -> None:
+        """Start reading from the transport without sending anything."""
+        if self._read_task is None:
+            self._read_task = asyncio.get_running_loop().create_task(self._read_loop())
+
     async def start(self) -> None:
-        """Begin reading, make sure RS232 control is enabled, then load full state."""
-        self._read_task = asyncio.get_running_loop().create_task(self._read_loop())
-        try:
-            await self.query()
-        except McIntoshCommandError, McIntoshTimeoutError:
-            await self._exchange(
-                zoned.enable_rs232(), _is_ctl_echo, self._timing.command
-            )
-            await self.query()
+        """Begin reading, get the unit ready for control, and load its full state."""
+        self.begin()
+        await self._dialect.handshake(self)
         self._set_connected(connected=True)
 
     async def stop(self) -> None:
@@ -130,65 +131,71 @@ class ZonedClient:
         await self._transport.close()
 
     # ------------------------------------------------------------- commands
-    async def query(self) -> zoned.DeviceState:
+    async def query(self) -> DeviceState:
         """Request full status; retry once if rejected just after power-up."""
         try:
-            await self._exchange(zoned.query(), _is_status_start, self._timing.query)
+            await self._run_query()
         except McIntoshCommandError as err:
-            if err.code != "1":
+            if err.code not in self._dialect.retry_query_codes:
                 raise
             await asyncio.sleep(self._timing.retry_delay)
-            await self._exchange(zoned.query(), _is_status_start, self._timing.query)
+            await self._run_query()
         return self._state
+
+    async def _run_query(self) -> None:
+        for command in self._dialect.query_commands():
+            try:
+                await self.exchange(command)
+            except McIntoshCommandError, McIntoshTimeoutError:
+                if command.required:
+                    raise
 
     async def set_power(self, zone: int, *, on: bool) -> None:
         """Turn a zone on or off and wait for the unit to confirm."""
-        await self._exchange(
-            zoned.power(zone, on=on),
-            _reply("PON" if on else "POF", zone),
-            self._timing.power,
-        )
+        await self._send(self._dialect.power(zone, on=on))
+        await self._dialect.after_power(self, zone, on=on)
 
     async def set_volume(self, zone: int, level: int) -> None:
         """Set a zone's volume to the unit's own step number."""
-        await self._exchange(
-            zoned.volume_set(zone, level),
-            _reply("VST", zone, str(level)),
-            self._timing.command,
-        )
+        await self._send(self._dialect.volume_set(zone, level))
 
     async def volume_step(self, zone: int, *, up: bool) -> None:
         """Raise or lower a zone's volume by one step."""
-        await self._exchange(
-            zoned.volume_step(zone, up=up), _reply("VST", zone), self._timing.command
-        )
+        await self._send(self._dialect.volume_step(zone, up=up))
 
     async def set_mute(self, zone: int, *, muted: bool) -> None:
         """Mute or unmute a zone."""
-        await self._exchange(
-            zoned.mute(zone, muted=muted),
-            _reply("MUT", zone, str(int(muted))),
-            self._timing.command,
-        )
+        await self._send(self._dialect.mute(zone, muted=muted))
 
     async def select_input(self, zone: int, number: int) -> None:
         """Select an input for a zone."""
-        await self._exchange(
-            zoned.select_input(zone, number),
-            _reply("INP", zone, str(number)),
-            self._timing.power,
-        )
+        await self._send(self._dialect.select_input(zone, number))
+
+    async def _send(self, command: Command) -> None:
+        if command.skip_if is not None and command.skip_if(self._state):
+            return  # the unit does not acknowledge a change to the value it already has
+        await self.exchange(command)
 
     # -------------------------------------------------------------- plumbing
-    async def _exchange(self, command: str, matches: Matcher, wait: float) -> Frame:
+    def _wait_for(self, wait: Wait) -> float:
+        return {
+            "command": self._timing.command,
+            "query": self._timing.query,
+            "power": self._timing.power,
+            "volume": self._timing.volume,
+            "optional": self._timing.optional,
+        }[wait]
+
+    async def exchange(self, command: Command) -> Frame:
+        """Send one command and wait for its reply, then for the line to go quiet."""
         async with self._lock:
             future: asyncio.Future[Frame] = asyncio.get_running_loop().create_future()
-            self._pending = _Pending(command, matches, future)
+            self._pending = _Pending(command, future)
             try:
-                await self._transport.write(command.encode("ascii"))
-                frame = await asyncio.wait_for(future, wait)
+                await self._transport.write(command.payload.encode("ascii"))
+                frame = await asyncio.wait_for(future, self._wait_for(command.wait))
             except TimeoutError as err:
-                raise McIntoshTimeoutError(command) from err
+                raise McIntoshTimeoutError(command.payload) from err
             except OSError as err:
                 raise McIntoshConnectionError(str(err)) from err
             finally:
@@ -213,8 +220,8 @@ class ZonedClient:
         while data := await self._transport.read():
             self._last_rx = monotonic()
             self._rx.set()
-            frames, buffer = parse_frames(
-                buffer + data.decode("ascii", errors="ignore")
+            frames, buffer = self._dialect.feed(
+                buffer, data.decode("ascii", errors="ignore")
             )
             for frame in frames:
                 self._handle(frame)
@@ -226,17 +233,33 @@ class ZonedClient:
 
     def _handle(self, frame: Frame) -> None:
         pending = self._pending
-        if zoned.is_error(frame):
-            code = frame.args[0] if frame.args else "?"
+        code = self._dialect.error_code(frame)
+        if code is not None:
             if pending is not None and not pending.future.done():
                 pending.future.set_exception(
-                    McIntoshCommandError(code, pending.command)
+                    McIntoshCommandError(code, pending.command.payload)
                 )
             return
         before = self._state
-        self._state = zoned.apply_frame(before, frame)
-        if pending is not None and not pending.future.done() and pending.matches(frame):
+        self._state = self._dialect.apply(before, frame)
+        if (
+            pending is not None
+            and not pending.future.done()
+            and pending.command.matches(frame)
+        ):
             pending.future.set_result(frame)
         if self._state != before:
             for listener in tuple(self._listeners):
                 listener(self._state)
+
+
+class ZonedClient(Client):
+    """A client for units that speak the zoned dialect (the MX119)."""
+
+    def __init__(self, transport: Transport, timing: Timing | None = None) -> None:
+        super().__init__(transport, ZonedDialect(), timing)
+
+
+def client_for(transport: Transport, profile: Profile) -> Client:
+    """Create a client for a model profile (its dialect and timing)."""
+    return Client(transport, get_dialect(profile.dialect), profile.timing)

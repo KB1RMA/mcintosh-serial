@@ -14,6 +14,19 @@ These rules apply to any AI coding agent or assistant working in this repository
 - Do not paste code from other projects unless its licence is permissive (MIT, BSD, Apache-2.0, ISC) and you keep its copyright notice and credit it in `README.md`. The existing McIntosh projects credited there were read for protocol knowledge only; no code was copied. Do not reproduce code from memory of other projects.
 - McIntosh's RS-232 application note and owner's manuals are not redistributed here. Describe the protocol in your own words and cite the source.
 
+## Models, command styles and honesty about what works
+
+- A model that speaks a known command style is a data file in `src/mcintosh_serial/models/` plus a row in
+  `docs/devices.md` (a test checks they agree). A new command style is a module in `dialects/`, an emulator in
+  `testing/`, protocol notes in `docs/protocols/`, and an entry in `tests/test_conformance.py`.
+- Set `status` truthfully. `verified` needs a capture from a real unit under `tests/captures/` that replays to the
+  right state. `reported` means another project says it works; `untested` means built from a document or an
+  assumption. Never promote a status because the code looks right.
+- Where a reply, error format or behavior is unknown, say so in the code, the protocol notes and the model file,
+  and make the library tolerant instead of guessing silently. Emulators must say when they copy a guess.
+- Captures and reports must not contain serial numbers or host names. `mcintosh-serial capture` hides them in the
+  report; keep it that way when changing it.
+
 ## Dependencies
 
 - Runtime dependencies must be MIT, BSD, Apache-2.0, ISC or similarly permissive, and must stay few. Ask the maintainer before adding one.
@@ -37,7 +50,7 @@ These rules apply to any AI coding agent or assistant working in this repository
 
 Tests exercise the library the way a user would: through its public API (`mcintosh_serial` and `mcintosh_serial.testing`).
 
-- Drive behavior through `ZonedClient` against `FakeMX119`, or over a pseudo-terminal for the real transport. Check results through state, return values, exceptions and what the fake received.
+- Drive behavior through `Client` (or `ZonedClient`) against the emulators in `mcintosh_serial.testing`, replay a capture with `ReplayTransport`, or use a pseudo-terminal for the real transport. Check results through state, return values, exceptions and what the fake received.
 - The emulator copies behavior seen on a real unit. When the real unit does something the emulator does not, add the behavior to the emulator first, then the test, and note it in `docs/protocols/`.
 - `tests/acceptance/` holds user-journey tests that import the library only as an installed package. CI runs them against the built wheel, so they must not import from `src/` or use relative paths.
 

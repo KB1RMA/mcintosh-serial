@@ -1,0 +1,27 @@
+# McIntosh MA352 integrated amplifier. Built from the mcintosh-ma352-hass project's notes (firmware 1.07);
+# not yet confirmed on hardware with this library. See docs/protocols/simple.md.
+id = "ma352"
+name = "McIntosh MA352"
+dialect = "simple"
+status = "reported"
+baudrate = 115200            # the default; the amplifier's setup menu can change it
+volume_max = 100
+connector = "3.5 mm TRS: tip = TX (from the unit), ring = RX (to the unit), sleeve = ground"
+zones = [1]
+notes = "After power-on the unit is unresponsive for about 16 seconds; commands sent meanwhile are queued, not dropped."
+
+[inputs]
+1 = "BAL 1"
+2 = "BAL 2"
+3 = "UNBAL 1"
+4 = "UNBAL 2"
+5 = "UNBAL 3"
+6 = "MM PHONO"
+
+[timing]
+power = 25.0
+volume = 10.0                # volume ramps to the target in 1 % steps; the ramp rate is not documented
+
+[references]
+projects = ["https://github.com/felix920506/mcintosh-ma352-hass"]
+documents = ["MA352 External Control Rev A (McIntosh)"]

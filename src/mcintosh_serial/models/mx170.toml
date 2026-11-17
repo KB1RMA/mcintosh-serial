@@ -1,0 +1,45 @@
+# McIntosh MX170 A/V processor. Built from the command names and replies in the hass-mcintosh project;
+# that project marks the MX170 as untested.
+# Not yet confirmed on hardware with this library. See docs/protocols/bang.md.
+id = "mx170"
+name = "McIntosh MX170"
+dialect = "bang"
+status = "untested"
+baudrate = 115200            # 9600 is also reported to work; the network port is TCP 84
+connector = "RS-232 (connector not yet documented here), or the network port, TCP 84"
+zones = [1, 2]
+notes = "Zone 2 power is not supported yet, because how the unit replies to it is not known."
+
+[inputs]
+0 = "HDMI 1"
+1 = "HDMI 2"
+2 = "HDMI 3"
+3 = "HDMI 4"
+4 = "HDMI 5"
+5 = "HDMI 6"
+6 = "HDMI 7"
+7 = "HDMI 8"
+8 = "Audio Return"
+9 = "SPDIF 1 (Optical)"
+10 = "SPDIF 2 (Optical)"
+11 = "SPDIF 3 (Optical)"
+12 = "SPDIF 4 (Optical)"
+13 = "SPDIF 5 (AES/EBU)"
+14 = "SPDIF 6 (Coaxial)"
+15 = "SPDIF 7 (Coaxial)"
+16 = "SPDIF 8 (Coaxial)"
+17 = "USB Audio"
+18 = "Analog 1"
+19 = "Analog 2"
+20 = "Analog 3"
+21 = "Analog 4"
+22 = "Balanced 1"
+23 = "Balanced 2"
+24 = "Phono"
+25 = "8 Channel Analog"
+
+[timing]
+settle = 0.4
+
+[references]
+projects = ["https://github.com/homeassistant-projects/hass-mcintosh"]

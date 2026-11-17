@@ -11,20 +11,23 @@ Assistant integration, but has no Home Assistant dependency.
 
 This project is independent. It is not affiliated with or endorsed by McIntosh Laboratory.
 
-> **Status:** early. Only the *zoned* command style is implemented, and it has been verified on one unit, a
-> McIntosh MX119. Other models are listed below as planned, not supported.
+> **Status:** early. McIntosh has used three different serial command styles, and the library speaks all three.
+> **Only the MX119 is verified on real hardware.** Other models are built from documents and other projects'
+> reports, and are labeled `reported` or `untested` in [docs/devices.md](docs/devices.md). Help turning those into
+> `verified` is the most useful contribution: see [adding a device](docs/adding-a-device.md).
 
 ## Usage
 
 ```python
 import asyncio
 
-from mcintosh_serial import ZonedClient, open_serial
+from mcintosh_serial import connect
 
 
 async def main() -> None:
-    client = ZonedClient(await open_serial("/dev/ttyUSB0", 9600))
-    await client.start()  # enables RS232 control if needed and loads full state
+    client = await connect(
+        "/dev/ttyUSB0", "mx119"
+    )  # opens the port at the model's baud rate and starts
     print(client.state.zone(1))
 
     await client.set_volume(1, 12)
@@ -39,41 +42,59 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-`open_serial` takes a device path or a URL and opens it with [serialx](https://github.com/puddly/serialx), the
-serial driver Home Assistant uses. That covers `socket://host:port` and `rfc2217://host:port` for network
-serial servers and, inside Home Assistant, `esphome-hass://` URLs for the serial ports of ESPHome devices such
-as the Home Assistant Connect AUX-2. The baud rate is passed along where the link supports it (device paths
-and ESPHome serial proxies); a `socket://` server has its own fixed baud rate.
+`connect` takes a model id (`mcintosh-serial models` lists them) and works the same for every command style. A
+model's settings (baud rate, zones, input names) are in `mcintosh_serial.get_profile("mx119")`.
+
+Volume is the unit's own step number, and input numbers are the unit's own too. Input names are in the model's
+profile, but owners can relabel inputs in a unit's menu, so treat them as defaults.
+
+The client sends one command at a time and waits for the unit to finish talking before the next, because some units
+drop commands that arrive while they are still replying. Commands raise `McIntoshTimeoutError`,
+`McIntoshCommandError` (the unit rejected it) or `McIntoshConnectionError`.
+
+### Serial links
+
+`open_serial` (used by `connect`) opens a device path or a URL with [serialx](https://github.com/puddly/serialx), the
+serial driver Home Assistant uses. That covers `socket://host:port` and `rfc2217://host:port` for network serial
+servers and, inside Home Assistant, `esphome-hass://` URLs for the serial ports of ESPHome devices such as the Home
+Assistant Connect AUX-2. The baud rate is passed along where the link supports it (device paths and ESPHome serial
+proxies); a `socket://` server has its own fixed baud rate.
 
 Outside Home Assistant you can reach an ESPHome device's serial proxy directly with
 `pip install "mcintosh-serial[esphome]"` and a URL such as
 `esphome://192.168.1.42:6053/?port_name=RS-232%20Port%201&key=...`.
 
-Volume is the unit's own step number; input numbers are the unit's own too (on an MX119, 0 Tuner, 1 PH/AUX,
-2 CD 2, 3 SAT, 4 TV, 5 DVD, 6 VCR 1, 7 Tape 1, unless relabeled in its menu).
-
-The client sends one command at a time and waits for the unit to finish talking before the next, because the
-unit drops commands that arrive while it is still replying. Commands raise `McIntoshTimeoutError`,
-`McIntoshCommandError` (the unit answered `(ERR n)`) or `McIntoshConnectionError`.
+You can also give a `Client` any object with `read`, `write` and `close` (the `Transport` protocol), for example
+streams from another serial library.
 
 ### Testing code that uses the library
 
-`mcintosh_serial.testing.FakeMX119` is an in-process emulation of the unit, built from captured traffic. It
-implements the transport interface, so you can hand it straight to `ZonedClient`.
+`mcintosh_serial.testing` has in-process emulations of units (`FakeMX119`, `FakeMA352`, `FakeMX160`) that implement
+the transport interface, and `ReplayTransport`, which plays a recorded capture back. Hand any of them to a `Client`.
 
-## Command styles
+## Supported models
 
-McIntosh has used three different serial command styles. They are not interchangeable.
+| Command style | Looks like | Models |
+|---|---|---|
+| zoned | `(PON Z1)`, `(VST Z1 8)`, `(CTL 1)` | MX119 (**verified**); C2500; MX120, MX132, MA5200 (untested) |
+| simple | `(PWR 1)`, `(VOL 65)`, `(STA 1)` | MA352, MA5300 (reported) |
+| bang | `!POWER?`, `!VOL(25)`, `!SRC(3)` | MX160 (reported); MX170, MX180 (untested) |
 
-| Style | Looks like | Models | Status |
-|---|---|---|---|
-| zoned | `(PON Z1)`, `(VST Z1 8)`, `(CTL 1)` | MX119 (verified); C47, C2500, MA5200 per McIntosh's application note | implemented, MX119 only |
-| simple | `(PWR 1)`, `(VOL 65)`, `(STA 1)` | MA352, MA5300 | planned, untested |
-| bang | `!POWER?`, `!VOL(n)`, `!SRC(n)` | MX160, MX170, MX180 | planned, untested |
+The full table with status, baud rate and zones is [docs/devices.md](docs/devices.md); it is checked against the model
+files by the tests. What was observed on real hardware is in [docs/protocols/](docs/protocols/).
 
-What was observed on a real MX119 (wiring, baud rate, timing, quirks) is in
-[docs/protocols/zoned.md](docs/protocols/zoned.md). If you have a McIntosh unit and can help test or have
-protocol documents, please open an issue.
+### Is your model missing, or does it not work?
+
+Two commands, no code:
+
+```bash
+mcintosh-serial detect /dev/ttyUSB0           # which command style does it speak?
+mcintosh-serial capture /dev/ttyUSB0 --model mx119   # record a safe session to paste into an issue
+```
+
+Neither changes volume, input, mute or power, and the report hides your serial number. Then open a
+[new device issue](https://github.com/KB1RMA/mcintosh-serial/issues/new?template=new-device.yml). Adding a model that
+speaks a known style is a small data file; [docs/adding-a-device.md](docs/adding-a-device.md) walks through it.
 
 ## Development
 
@@ -84,7 +105,8 @@ uv run pyright
 uv run pytest            # 100% branch coverage is required
 ```
 
-`tests/acceptance/` runs against the built wheel in CI. See [AGENTS.md](AGENTS.md) for the project rules.
+`tests/acceptance/` runs against the built wheel in CI. See [CONTRIBUTING.md](CONTRIBUTING.md) and
+[AGENTS.md](AGENTS.md) for the project rules.
 
 ## Credits
 

@@ -1,0 +1,16 @@
+# McIntosh MX120 A/V control center. ASSUMED to share the MX119's command style: Crestron's module for it
+# documents 9600 8N1 and the same "RS232-ON" step the MX119's (CTL 1) performs. Nothing here is confirmed;
+# the input list is unknown, so the library shows "Input n". An owner can fill it in with a capture.
+id = "mx120"
+name = "McIntosh MX120"
+dialect = "zoned"
+status = "untested"
+baudrate = 9600
+connector = "DB9 (assumed the same as the MX119)"
+zones = [1, 2]
+notes = "Assumed from Crestron's module documentation (firmware 1.07q); the command syntax itself is unconfirmed."
+
+[inputs]
+
+[references]
+documents = ["Crestron MX120 module help (RS232 settings and the RS232-ON requirement)"]

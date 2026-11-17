@@ -1,0 +1,28 @@
+# McIntosh C2500 preamplifier. Built from a Home Assistant ESPHome gist by the C2500's owner, who reports
+# power, volume and input working over the zoned command style; not confirmed here.
+# See docs/protocols/zoned.md. The gist does not parse power replies, so whether the unit reports power
+# (and starts its (QRY) reply with (PON Z1)/(POF Z1) as the MX119 does) is not known.
+id = "c2500"
+name = "McIntosh C2500"
+dialect = "zoned"
+status = "reported"
+baudrate = 115200
+connector = "3.5 mm TRS: tip = TX (from the unit), ring = RX (to the unit), sleeve = ground (per McIntosh's RS-232 application note)"
+zones = [1]
+notes = "Power-on needs the command sent twice, 100 ms apart, when the unit is in standby (per McIntosh's application note)."
+
+[inputs]
+1 = "MC"
+2 = "MM"
+3 = "CD 1"
+4 = "CD 2"
+5 = "DVD"
+6 = "AUX"
+7 = "Server"
+8 = "D2A"
+9 = "Tuner AM"
+10 = "Tuner FM"
+
+[references]
+projects = ["https://gist.github.com/daemonp/0ff629f34701b8da210fe932e4f17f8a"]
+documents = ["McIntosh Control Interface application note RX0001 (Rob Kikta, 2015)"]

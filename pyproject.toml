@@ -24,6 +24,9 @@ dependencies = [
 # when not running inside Home Assistant.
 esphome = ["serialx[esphome]>=1.11.0"]
 
+[project.scripts]
+mcintosh-serial = "mcintosh_serial.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/KB1RMA/mcintosh-serial"
 Repository = "https://github.com/KB1RMA/mcintosh-serial"
@@ -75,6 +78,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"src/mcintosh_serial/cli.py" = [
+    "T201",     # the command prints to the terminal
+]
 "tests/**" = [
     "S101",     # pytest asserts
     "PLR2004",  # literal values in asserts
