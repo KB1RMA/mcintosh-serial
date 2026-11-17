@@ -1,18 +1,14 @@
-"""In-process emulation of an MX119, for tests of this library and of integrations.
+"""In-process emulation of an MX119 (the zoned dialect), built from traffic captured on a real unit.
 
-Behavior is copied from traffic captured on a real unit (docs/protocols/zoned.md):
-RS232 must be enabled with (CTL 1), replies and pushes match, the unit mutes itself
-around input and power changes, and commands that arrive while it is still talking
-are dropped.
+Behavior is copied from docs/protocols/zoned.md: RS232 must be enabled with (CTL 1),
+replies and pushes match, the unit mutes itself around input and power changes, and
+commands that arrive while it is still talking are dropped.
 """
 
-import asyncio
-from dataclasses import dataclass, field
 import re
-from typing import TYPE_CHECKING
+from typing import override
 
-if TYPE_CHECKING:
-    from collections.abc import Coroutine
+from mcintosh_serial.testing._base import FakeUnit
 
 _COMMAND_RE = re.compile(r"\(([^()]*)\)")
 _ZONE_RE = re.compile(r"^Z(\d)$")
@@ -24,60 +20,28 @@ _SECOND_DUMP_DELAY = 5.0  # seconds before the second dump after power-on
 _LINE_GAP = 0.03  # seconds between lines of a status dump
 
 
-@dataclass(slots=True)
-class FakeMX119:
-    """A fake MX119 that implements the client's transport interface.
+class FakeMX119(FakeUnit):
+    """A fake MX119 that implements the client's transport interface."""
 
-    ``time_scale`` multiplies every delay the real unit shows, so tests stay fast.
-    """
+    def __init__(
+        self, time_scale: float = 0.01, *, rs232_enabled: bool = False
+    ) -> None:
+        super().__init__(time_scale)
+        self.rs232_enabled = rs232_enabled
+        self.powered = {1: True, 2: False}
+        self.input = {1: 3, 2: 3}
+        self.volume = {1: 8, 2: 20}
+        self.muted = {1: False, 2: True}
+        self.reject_next_query = False  # simulate (ERR 1) right after power-up
 
-    time_scale: float = 0.01
-    rs232_enabled: bool = False
-    powered: dict[int, bool] = field(default_factory=lambda: {1: True, 2: False})
-    input: dict[int, int] = field(default_factory=lambda: {1: 3, 2: 3})
-    volume: dict[int, int] = field(default_factory=lambda: {1: 8, 2: 20})
-    muted: dict[int, bool] = field(default_factory=lambda: {1: False, 2: True})
-    reject_next_query: bool = False  # simulate (ERR 1) right after power-up
-    dropped: list[str] = field(default_factory=list[str])
-    _out: asyncio.Queue[bytes] = field(default_factory=asyncio.Queue[bytes])
-    _in: str = ""
-    _busy: bool = False
-    _tasks: set[asyncio.Task[None]] = field(default_factory=set[asyncio.Task[None]])
-
-    # ---------------------------------------------------------------- wire
-    async def read(self) -> bytes:
-        """Return the next bytes the unit sends; ``b""`` after close."""
-        return await self._out.get()
-
-    async def write(self, data: bytes) -> None:
-        """Accept bytes from the client and run each complete command."""
-        self._in += data.decode("ascii", errors="ignore")
-        commands = _COMMAND_RE.findall(self._in)
-        if commands:
-            self._in = self._in[self._in.rfind(")") + 1 :]
-        for command in commands:
-            self._spawn(self._handle(command))
-
-    async def close(self) -> None:
-        """Cancel anything the unit was still going to send, then signal EOF."""
-        pending = tuple(self._tasks)
-        for task in pending:
-            task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True)
-        self._busy = False
-        await self._out.put(b"")
-
-    def _spawn(self, coro: Coroutine[object, object, None]) -> None:
-        task = asyncio.get_running_loop().create_task(coro)
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
-
-    async def _sleep(self, seconds: float) -> None:
-        await asyncio.sleep(seconds * self.time_scale)
+    @override
+    def _split(self, text: str) -> tuple[list[str], str]:
+        commands = _COMMAND_RE.findall(text)
+        return commands, text[text.rfind(")") + 1 :] if commands else text
 
     async def _emit(self, *lines: str, gap: float = 0.0) -> None:
         for line in lines:
-            await self._out.put(f"({line})\r\n".encode("ascii"))
+            await self._emit_raw(f"({line})\r\n")
             await self._sleep(gap)
 
     # --------------------------------------------------------------- state
@@ -115,17 +79,11 @@ class FakeMX119:
         await self._out.put(b"\x00")
 
     # ------------------------------------------------------------ commands
-    async def _handle(self, payload: str) -> None:
-        if self._busy:
-            self.dropped.append(payload)
-            return
-        self._busy = True
-        try:
-            await self._dispatch(payload.split())
-        finally:
-            self._busy = False
+    @override
+    async def _dispatch(self, command: str) -> None:
+        await self._dispatch_tokens(command.split())
 
-    async def _dispatch(self, tokens: list[str]) -> None:
+    async def _dispatch_tokens(self, tokens: list[str]) -> None:
         name, args = (tokens[0].upper(), tokens[1:]) if tokens else ("", [])
         if name == "CTL" and args in (["0"], ["1"]):
             self.rs232_enabled = args == ["1"]

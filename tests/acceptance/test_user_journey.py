@@ -108,3 +108,19 @@ async def test_an_input_the_receiver_ignores_times_out(
     await client.start()
     with pytest.raises(McIntoshTimeoutError):
         await client.select_input(1, 9)
+
+
+def test_the_installed_package_ships_its_model_files_and_command_line() -> None:
+    import subprocess  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    result = subprocess.run(
+        [sys.executable, "-m", "mcintosh_serial", "models"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    for model in ("mx119", "ma352", "ma5300", "mx160", "c2500"):
+        assert model in result.stdout
+    assert "verified" in result.stdout

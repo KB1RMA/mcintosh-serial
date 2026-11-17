@@ -1,0 +1,17 @@
+{
+  "model": "mx119",
+  "zones": {
+    "1": {
+      "power": true,
+      "input": 3,
+      "volume": 8,
+      "muted": false
+    },
+    "2": {
+      "power": false,
+      "input": 3,
+      "volume": 20,
+      "muted": true
+    }
+  }
+}

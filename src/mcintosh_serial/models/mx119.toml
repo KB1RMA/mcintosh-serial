@@ -1,0 +1,21 @@
+# McIntosh MX119 A/V control center. See docs/protocols/zoned.md for how this was observed.
+id = "mx119"
+name = "McIntosh MX119"
+dialect = "zoned"
+status = "verified"          # verified = confirmed on real hardware; untested = built from documents or other projects
+baudrate = 9600
+connector = "DB9: pin 2 TXD (from the unit), pin 3 RXD (to the unit), pin 5 ground"
+zones = [1, 2]
+
+[inputs]                       # unit input number = name; owners can relabel inputs in the unit's menu
+0 = "Tuner"
+1 = "PH/AUX"
+2 = "CD 2"
+3 = "SAT"
+4 = "TV"
+5 = "DVD"
+6 = "VCR 1"
+7 = "Tape 1"
+
+[references]
+documents = ["MX119 owner's manual (RS232 pinout and input list)"]

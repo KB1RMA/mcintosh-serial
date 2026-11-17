@@ -1,0 +1,49 @@
+name: New device or model support
+description: A McIntosh model that is missing, untested, or does not work
+title: "[device] McIntosh <model>"
+labels: ["device"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! The easiest way to help is to run two commands and paste the result.
+        See [adding a device](https://github.com/KB1RMA/mcintosh-serial/blob/main/docs/adding-a-device.md).
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: For example MX136, C47, MA8900
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: What happened
+      options:
+        - mcintosh-serial detect found a command style
+        - detect found nothing
+        - A listed model does not work as the table says
+        - I have not tried yet
+    validations:
+      required: true
+  - type: textarea
+    id: detect
+    attributes:
+      label: Output of `mcintosh-serial detect`
+      render: text
+  - type: textarea
+    id: capture
+    attributes:
+      label: Output of `mcintosh-serial capture` (serial number is hidden)
+      description: Attach the `.jsonl` file below this form or in a comment.
+      render: markdown
+  - type: textarea
+    id: link
+    attributes:
+      label: How it is connected
+      description: Cable or adapter, the unit's connector (DB9, 3.5 mm...), any TX/RX switch, baud rate set on the unit.
+  - type: textarea
+    id: docs
+    attributes:
+      label: Documents
+      description: Any protocol document or manual page you have. Do not paste copyrighted manuals; link them or name the page.

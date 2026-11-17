@@ -1,0 +1,28 @@
+name: Bug report
+description: Something in the library does not behave
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Library version
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model and its status in docs/devices.md
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Debug log or `mcintosh-serial capture` output
+      description: Serial numbers are hidden by `capture`; please check logs for them.
+      render: text

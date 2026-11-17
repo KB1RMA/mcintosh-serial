@@ -18,9 +18,9 @@ class McIntoshTimeoutError(McIntoshError):
 
 
 class McIntoshCommandError(McIntoshError):
-    """The unit answered ``(ERR n)``."""
+    """The unit rejected a command; ``code`` is its error code or text."""
 
     def __init__(self, code: str, command: str) -> None:
-        super().__init__(f"{command} rejected with (ERR {code})")
+        super().__init__(f"{command.strip()} rejected by the unit (error: {code})")
         self.code = code
         self.command = command
